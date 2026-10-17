@@ -1,6 +1,6 @@
-# Auto Next – Reels, TikTok & Shorts
+# Auto Next – Reels, TikTok, Shorts, Instagram & X
 
-Extension Chrome tự động chuyển sang video tiếp theo khi hết clip trên **Facebook Reels**, **TikTok** và **YouTube Shorts**.
+Extension Chrome tự động chuyển sang video tiếp theo khi hết clip trên **Facebook Reels**, **Instagram Reels**, **TikTok**, **YouTube Shorts** và **X (Twitter) Videos**.
 
 ## Cách cài đặt
 
@@ -8,16 +8,21 @@ Extension Chrome tự động chuyển sang video tiếp theo khi hết clip tr�
 2. Mở Chrome, vào địa chỉ: `chrome://extensions`
 3. Bật **Developer mode** (Chế độ nhà phát triển) ở góc trên bên phải.
 4. Bấm **Load unpacked** (Tải tiện ích đã giải nén) và chọn thư mục `fb-tiktok-auto-next`.
-5. Mở Facebook Reels, TikTok hoặc YouTube Shorts — biểu tượng extension sẽ hiện badge **ON**.
+5. Mở Facebook Reels, Instagram, TikTok, YouTube Shorts hoặc X — biểu tượng extension sẽ hiện badge **ON**.
 
-## Tính năng
+## Tính năng nổi bật
 
-- ✅ Tự chuyển video khi clip kết thúc (Facebook Reels + TikTok + YouTube Shorts)
+- ✅ Tự chuyển video khi clip kết thúc (Facebook Reels, Instagram Reels, TikTok, YouTube Shorts, X Videos)
+- ✅ Watchdog Timer cứu hộ chống kẹt video khi buffering quay vòng hoặc mạng nghẽn quá 10s
+- ✅ Chuyển video mượt mà không khoảng chết (Seamless Pre-scroll -0.5s)
+- ✅ Chặn cứng tài khoản Facebook (Hard Account Block) trực tiếp từ giao diện Reels
+- ✅ Hệ sinh thái danh sách chặn tập trung: Xem, chọn checkbox bỏ chặn hàng loạt, xuất/nhập file JSON
+- ✅ Đồng bộ danh sách chặn trực tuyến qua link từ xa (Remote Blocklist Subscription qua URL)
 - ✅ Hoạt động cả khi tab ở nền / bạn chuyển sang cửa sổ khác (event-driven, không phụ thuộc timer bị throttle)
 - ✅ Tự tắt chế độ lặp (loop) của video để bắt được sự kiện kết thúc
 - ✅ Nhiều tầng dự phòng: bấm nút Next thật → phím mũi tên → cuộn trang → vuốt giả lập
 - ✅ Tự xác nhận đã chuyển video, nếu chưa thì thử lại (tối đa 8 lần)
-- ✅ Bật/tắt riêng cho từng trang trong popup
+- ✅ Bật/tắt riêng cho từng nền tảng trong popup
 - ✅ Hỗ trợ nhãn nút đa ngôn ngữ (Việt, Anh, Pháp, Tây Ban Nha, Đức, Nhật, Hàn)
 
 ## Lưu ý quan trọng về chạy nền

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Auto Next</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      width: 300px;
+      margin: 0;
+      padding: 14px;
+      background: #0f1115;
+      color: #e7e9ee;
+    }
+    h1 {
+      font-size: 15px;
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h1 img { width: 20px; height: 20px; border-radius: 5px; }
+    .sub { font-size: 11px; color: #9aa1ad; margin-bottom: 12px; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #22262e;
+      font-size: 13px;
+    }
+    .row:last-of-type { border-bottom: none; }
+    .switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      flex: none;
+    }
+    .switch input { display: none; }
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: #3a3f4a;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .slider::before {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 2px;
+      top: 2px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.15s ease;
+    }
+    input:checked + .slider { background: #16a34a; }
+    input:checked + .slider::before { transform: translateX(18px); }
+    .section { margin-top: 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #6c7482; }
+    .actions { display: flex; gap: 6px; margin-top: 12px; }
+    .txt {
+      width: 100%;
+      box-sizing: border-box;
+      background: #171a21;
+      border: 1px solid #2b2f3a;
+      color: #e7e9ee;
+      border-radius: 8px;
+      padding: 8px 9px;
+      font-size: 12px;
+      outline: none;
+    }
+    .loghead { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; font-weight: 700; }
+    .loghead button { border: none; background: #2b2f3a; color: #9aa1ad; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
+    .logfilter { display: flex; gap: 4px; margin-top: 6px; }
+    .logfilter button { border: 1px solid #2b2f3a; background: #171a21; color: #9aa1ad; border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
+    .logfilter button.active { background: #2b2f3a; color: #fff; }
+    .log {
+      margin-top: 6px;
+      max-height: 170px;
+      overflow: auto;
+      background: #171a21;
+      border: 1px solid #2b2f3a;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 11px;
+      line-height: 1.55;
+      color: #c6cbd4;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .actions button {
+      flex: 1;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      background: #22262e;
+      cursor: pointer;
+    }
+    .actions button:hover { background: #2c313b; }
+    .status {
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #171b22;
+      font-size: 12px;
+      color: #9aa1ad;
+      line-height: 1.5;
+    }
+    .status b { color: #e7e9ee; }
+    .num {
+      width: 64px;
+      border: 1px solid #2b2f3a;
+      background: #171b22;
+      color: #e7e9ee;
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 12px;
+      text-align: right;
+    }
+    .hint { margin-top: 10px; font-size: 11px; color: #6c7482; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1><img src="icons/icon48.png" alt="" /> Auto Next – Reels, TikTok & Shorts</h1>
+  <div class="sub">Tự chuyển video khi hết clip — Facebook, Instagram, TikTok, YouTube &amp; X</div>
+
+  <div class="row">
+    <span>Bật tiện ích</span>
+    <label class="switch"><input type="checkbox" id="enabled" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Facebook Reels</span>
+    <label class="switch"><input type="checkbox" id="facebook" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Instagram Reels</span>
+    <label class="switch"><input type="checkbox" id="instagram" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>TikTok</span>
+    <label class="switch"><input type="checkbox" id="tiktok" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>YouTube Shorts</span>
+    <label class="switch"><input type="checkbox" id="youtube" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>X (Twitter) Videos</span>
+    <label class="switch"><input type="checkbox" id="x" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Ghi log gỡ lỗi (Console)</span>
+    <label class="switch"><input type="checkbox" id="debug" /><span class="slider"></span></label>
+  </div>
+
+  <div class="section">Tính năng VIP</div>
+  <div class="row">
+    <span>Thanh điều khiển nổi trên video</span>
+    <label class="switch"><input type="checkbox" id="hud" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Phát nền (không dừng khi đổi tab)</span>
+    <label class="switch"><input type="checkbox" id="backgroundPlay" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Chế độ siêu nhẹ (ẩn HUD, chỉ giữ tự chuyển clip)</span>
+    <label class="switch"><input type="checkbox" id="liteMode" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Bỏ qua clip đã xem</span>
+    <label class="switch"><input type="checkbox" id="skipSeen" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Chuẩn hoá âm lượng (chống clip quá to)</span>
+    <label class="switch"><input type="checkbox" id="volumeNormalize" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Tự bật PiP khi rời tab</span>
+    <label class="switch"><input type="checkbox" id="autoPip" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Đè giữ lên video để tua nhanh 2x</span>
+    <label class="switch"><input type="checkbox" id="holdFast" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Lọc theo thời lượng (tự lướt clip ngoài ngưỡng)</span>
+    <label class="switch"><input type="checkbox" id="durFilter" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>— Bỏ clip ngắn hơn (giây, 0 = tắt)</span>
+    <input type="number" class="num" id="durMin" min="0" step="1" />
+  </div>
+  <div class="row">
+    <span>— Bỏ clip dài hơn (giây, 0 = tắt)</span>
+    <input type="number" class="num" id="durMax" min="0" step="1" />
+  </div>
+  <div class="row">
+    <span>Tự lướt clip quảng cáo (Được tài trợ)</span>
+    <label class="switch"><input type="checkbox" id="adSkip" /><span class="slider"></span></label>
+  </div>
+  <div class="row">
+    <span>Tua qua giây đầu mỗi clip (giây, 0 = tắt)</span>
+    <input type="number" class="num" id="introSkip" min="0" step="1" />
+  </div>
+  <div class="row">
+    <span>Giới hạn danh sách tải (10–500 link, đầy tự bỏ link cũ)</span>
+    <input type="number" class="num" id="bulkLimit" min="10" max="500" step="10" />
+  </div>
+  <div class="row">
+    <span>Chuyển clip sớm/trễ ± giây (âm = sớm, dương = trễ)</span>
+    <input type="number" class="num" id="endOffset" min="-10" max="10" step="0.5" />
+  </div>
+  <div class="row">
+    <span>Phím tắt (Alt+Shift + D/P/L/N/S/B/F/M/X/C/A)</span>
+    <label class="switch"><input type="checkbox" id="shortcuts" /><span class="slider"></span></label>
+  </div>
+  <div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
+    <span>Mẫu tên file tải — dùng {tacgia} {tieude} {ngay} {site} {id}</span>
+    <input type="text" class="txt" id="fileTemplate" placeholder="{site} - {tacgia} - {tieude} - {ngay}" />
+  </div>
+
+  <div class="actions">
+    <button id="act-download">⭳ Tải video</button>
+    <button id="act-pip">⧉ Phát nổi</button>
+    <button id="act-bulk">▦ Danh sách tải</button>
+  </div>
+  <div class="actions">
+    <button id="act-fav">⭐ Yêu thích</button>
+    <button id="act-clearseen">🧹 Xoá lịch sử đã xem</button>
+  </div>
+
+  <div class="status" id="status">Đang kiểm tra tab hiện tại…</div>
+
+  <div class="loghead"><span>📜 Nhật ký hoạt động (50 gần nhất)</span><span style="display:flex;gap:4px"><button id="act-logcopy" title="Sao chép nhật ký + thông tin phiên bản để báo lỗi">Sao chép</button><button id="act-logclear">Xoá</button></span></div>
+  <div class="logfilter" id="logfilter"><button data-f="all" class="active">Tất cả</button><button data-f="dl">⭳ Tải</button><button data-f="nav">▶ Chuyển clip</button><button data-f="warn">⚠️ Cảnh báo</button></div>
+  <div class="log" id="actlog">Chưa có sự kiện nào.</div>
+
+  <div class="hint">
+    Mẹo: để chạy ổn định khi bạn chuyển sang cửa sổ khác, đừng thu nhỏ (minimize)
+    cửa sổ chứa video — hãy để nó hé một phần trên màn hình. Chrome sẽ tạm dừng
+    video trong cửa sổ bị thu nhỏ hoàn toàn.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

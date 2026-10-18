@@ -1102,6 +1102,23 @@
     refreshHud();
     if (panelOpen && activeTab === 'block') renderPanel();
   }
+  function showBlockMenuFacebook() {
+    const a = currentAuthor();
+    if (!a) {
+      toast('Không nhận diện được tác giả clip này — đợi clip hiện đầy đủ rồi thử lại', 3000);
+      return;
+    }
+    const choice = confirm(
+      'CHẶN TÁC GIẢ TRÊN FACEBOOK: ' + a + '\n\n' +
+      '• Bấm [OK]: CHẶN CỨNG trên Facebook (Tự động mở menu và chặn tài khoản vĩnh viễn, không bao giờ gặp lại).\n\n' +
+      '• Bấm [Hủy]: CHẶN MỀM (Chỉ tự động lướt qua clip trên tiện ích này).'
+    );
+    if (choice) {
+      hardBlockFacebookPage(true);
+    } else {
+      toggleBlockAuthor();
+    }
+  }
   // Chặn theo từ khóa tiêu đề: clip có tiêu đề chứa từ khóa sẽ được tự lướt
   // qua (kiểm tra ở content.js). Lưu ý: Facebook Reels không có tiêu đề riêng
   // từng clip nên bộ lọc này hiệu quả nhất trên TikTok / YouTube Shorts.
@@ -1149,9 +1166,7 @@
 
   // Chặn vĩnh viễn Trang trên tài khoản Facebook (Hard Block Account via 3-dots native menu)
   let hardBlockInProgress = false;
-  let lastHardBlockIntentAt = 0;
-  let lastHardBlockIntentAuthor = '';
-  async function hardBlockFacebookPage() {
+  async function hardBlockFacebookPage(skipConfirm = false) {
     if (!isFacebook) {
       toast('Chặn tài khoản vĩnh viễn hiện chỉ áp dụng trên Facebook Reels');
       return;
@@ -1162,22 +1177,19 @@
     const v = api && typeof api.getActiveVideo === 'function' ? api.getActiveVideo() : document.querySelector('video');
     const authorName = (api && typeof api.author === 'function' ? api.author() : currentAuthor()) || 'Trang này';
 
-    // Cơ chế an toàn chống bấm nhầm: yêu cầu giữ xác nhận 2 lần trong vòng 3.5 giây
-    const now = Date.now();
-    if (now - lastHardBlockIntentAt > 3500 || lastHardBlockIntentAuthor !== authorName) {
-      lastHardBlockIntentAt = now;
-      lastHardBlockIntentAuthor = authorName;
-      toast('⚠️ Giữ nút 🚫 lần nữa trong 3.5s để XÁC NHẬN chặn vĩnh viễn ' + authorName + ' trên FB!', 3500);
-      return;
+    if (!skipConfirm) {
+      if (!confirm('Bạn có chắc muốn CHẶN VĨNH VIỄN ' + authorName + ' trên tài khoản Facebook không?\n(Sau khi chặn, Facebook sẽ chặn nick thật và không bao giờ phân phối clip của Trang này nữa)')) {
+        return;
+      }
     }
-    lastHardBlockIntentAt = 0;
+
     hardBlockInProgress = true;
 
     // Tạm giữ không cho auto-next nhảy dở chừng
     try { api && api.setLoopHold && api.setLoopHold(true); } catch {}
     try { if (v && !v.paused) v.pause(); } catch {}
 
-    toast('Đang thực hiện chặn ' + authorName + ' trên Facebook...', 3000);
+    toast('Đang thực hiện quy trình chặn ' + authorName + ' trên Facebook...', 3500);
 
     try {
       // 1. Tìm container chứa Reel đang phát
@@ -1185,8 +1197,8 @@
 
       // 2. Tìm nút 3 chấm (...)
       const optLabels = [
-        'hành động cho bài viết này', 'tác vụ khác', 'tùy chọn khác', 'thao tác khác',
-        'actions for this post', 'more options', 'options'
+        'hành động cho bài viết này', 'tác vụ khác cho thước phim này', 'tác vụ khác', 'tùy chọn khác', 'thao tác khác',
+        'actions for this post', 'more options for this reel', 'more options', 'options', 'xem thêm'
       ];
       let optBtn = null;
       const candidates = Array.from(scope.querySelectorAll('[aria-label], [role="button"][aria-label], button[aria-label]'));
@@ -1202,6 +1214,19 @@
       if (!optBtn) {
         const popupBtns = Array.from(scope.querySelectorAll('[role="button"][aria-haspopup="menu"], button[aria-haspopup="menu"]'));
         if (popupBtns.length) optBtn = popupBtns[0];
+      }
+      if (!optBtn) {
+        // Tìm rộng ra toàn bộ tài liệu nếu đang xem trên profile/trang
+        const globalCandidates = Array.from(document.querySelectorAll('[aria-label], [role="button"][aria-label], button[aria-label]'));
+        for (const el of globalCandidates) {
+          const lbl = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+          if (optLabels.some(l => lbl === l || lbl.includes(l))) {
+            if (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0) {
+              optBtn = el;
+              break;
+            }
+          }
+        }
       }
 
       if (!optBtn) {
@@ -1246,7 +1271,7 @@
 
       syntheticClick(blockItem);
 
-      // 5. Chờ hộp thoại xác nhận (div[role="dialog"])
+      // 5. Chờ hộp thoại xác nhận thứ 1: "Chặn [Tên]?" (div[role="dialog"])
       let dialog = null;
       const dlgStart = Date.now();
       while (Date.now() - dlgStart < 3000) {
@@ -1260,13 +1285,13 @@
         return;
       }
 
-      // 6. Tìm nút xác nhận trong dialog
+      // 6. Tìm nút Xác nhận trong dialog
       let confirmBtn = null;
       const dlgBtns = Array.from(dialog.querySelectorAll('[role="button"], button'));
       for (const b of dlgBtns) {
         const txt = (b.textContent || '').trim().toLowerCase();
         const aria = (b.getAttribute('aria-label') || '').trim().toLowerCase();
-        if (/hủy|cancel|đóng|close/i.test(txt) || /hủy|cancel|đóng|close/i.test(aria)) continue;
+        if (/hủy|cancel/i.test(txt) || /hủy|cancel/i.test(aria)) continue;
         if (/chặn|block|xác nhận|confirm/i.test(txt) || /chặn|block|xác nhận|confirm/i.test(aria)) {
           confirmBtn = b;
           break;
@@ -1281,7 +1306,29 @@
       syntheticClick(confirmBtn);
       await new Promise(r => setTimeout(r, 600));
 
-      // 7. Đồng thời lưu tác giả vào danh sách đen của tiện ích
+      // 7. Chờ hộp thoại thứ 2 xuất hiện: "Bạn đã chặn [Tên]" và tự động bấm nút "Đóng"
+      const closeStart = Date.now();
+      while (Date.now() - closeStart < 2500) {
+        await new Promise(r => setTimeout(r, 100));
+        const allDlgs = Array.from(document.querySelectorAll('div[role="dialog"]'));
+        let closed = false;
+        for (const dlg of allDlgs) {
+          const btns = Array.from(dlg.querySelectorAll('[role="button"], button'));
+          for (const b of btns) {
+            const txt = (b.textContent || '').trim().toLowerCase();
+            const aria = (b.getAttribute('aria-label') || '').trim().toLowerCase();
+            if (txt === 'đóng' || txt === 'close' || txt === 'ok' || aria === 'đóng' || aria === 'close') {
+              syntheticClick(b);
+              closed = true;
+              break;
+            }
+          }
+          if (closed) break;
+        }
+        if (closed) break;
+      }
+
+      // 8. Đồng thời lưu tác giả vào danh sách đen của tiện ích
       const a = currentAuthor();
       if (a) {
         const key = authorKeyOf(a);
@@ -1291,10 +1338,10 @@
         }
       }
 
-      toast('🚫 Đã chặn vĩnh viễn Trang trên tài khoản Facebook!', 4000);
+      toast('🚫 Đã chặn vĩnh viễn ' + authorName + ' trên Facebook!', 4000);
       refreshHud();
 
-      // 8. Tự động lướt sang clip kế tiếp sau 800ms
+      // 9. Tự động lướt sang clip kế tiếp sau 800ms
       setTimeout(() => {
         try { api && api.setLoopHold && api.setLoopHold(false); } catch {}
         try { api && api.next && api.next(); } catch {}
@@ -1644,7 +1691,7 @@
 
   // ---------- HUD (top frame only) ----------
   const HUD_CSS = ":host{ all:initial; } *{ box-sizing:border-box; font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; } .bar{ display:flex; align-items:center; gap:6px; padding:7px 9px; background:linear-gradient(135deg,#7C3AED,#EC4899,#FB923C); border-radius:999px; box-shadow:0 10px 30px rgba(0,0,0,.35); } .handle{ cursor:grab; color:rgba(255,255,255,.9); font-size:16px; padding:0 2px; user-select:none; touch-action:none; } .bar button{ position:relative; width:34px; height:34px; border:none; border-radius:50%; background:rgba(255,255,255,.16); color:#fff; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s ease, transform .1s ease; } .bar button:hover{ background:rgba(255,255,255,.34); } .bar button:active{ transform:scale(.92); } .bar button.active{ background:#fff; color:#EC4899; } .bar button svg{ width:16px; height:16px; display:block; pointer-events:none; } .dot svg{ width:14px; height:14px; display:block; pointer-events:none; } [data-act=fav].active svg path{ fill:currentColor; } [data-act=min] .ic-plus{ display:none; } .wrap.mini [data-act=min] .ic-min{ display:none; } .wrap.mini [data-act=min] .ic-plus{ display:block; } [data-act=vol]{ padding:0; overflow:hidden; } [data-act=vol] .vh{ flex:1 1 50%; align-self:stretch; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; line-height:1; user-select:none; } [data-act=vol] .vh:hover{ background:rgba(255,255,255,.28); } [data-act=vol] .vsep{ width:1px; align-self:stretch; margin:8px 0; background:rgba(255,255,255,.45); } [data-act=speed]{ width:auto !important; padding:0 10px; border-radius:17px !important; font-weight:700; font-size:13px; } .bulk-count{ position:absolute; top:-4px; right:-4px; background:#111; color:#fff; font-size:10px; font-weight:700; min-width:15px; height:15px; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:0 3px; } .panel{ display:none; flex-direction:column; margin-top:8px; width:320px; max-height:340px; background:#14161b; color:#e7e9ee; border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.45); overflow:hidden; } .phead{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#1b1e25; font-size:13px; } .phead .x{ border:none; background:transparent; color:#9aa1ad; cursor:pointer; font-size:14px; } .list{ overflow:auto; padding:6px; flex:1; } .list .row{ display:flex; align-items:center; gap:8px; padding:6px; border-radius:8px; } .list .row:hover{ background:#1b1e25; } .list .ix{ color:#6c7482; font-size:11px; width:16px; } .list .ttl{ flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .list .mini{ border:none; background:#2b2f3a; color:#fff; border-radius:6px; padding:4px 8px; font-size:11px; cursor:pointer; } .empty{ color:#8a91a0; font-size:12px; text-align:center; padding:20px 10px; line-height:1.5; } .pfoot{ display:flex; gap:8px; padding:10px; background:#1b1e25; } .big{ flex:1; border:none; border-radius:8px; padding:9px; background:linear-gradient(135deg,#7C3AED,#EC4899); color:#fff; font-weight:700; cursor:pointer; } .ghost{ border:1px solid #2b2f3a; background:transparent; color:#9aa1ad; border-radius:8px; padding:9px 10px; cursor:pointer; } .ghost.active{ background:#EC4899; color:#fff; border-color:#EC4899; } .tabs{ display:flex; gap:4px; } .tab{ border:none; background:transparent; color:#9aa1ad; font-size:12px; font-weight:700; cursor:pointer; padding:4px 8px; border-radius:6px; } .tab.active{ background:#2b2f3a; color:#fff; } .ttl.link{ cursor:pointer; } .ttl.link:hover{ text-decoration:underline; } .dot{ display:none; width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#7C3AED,#EC4899); box-shadow:0 8px 22px rgba(0,0,0,.35); cursor:pointer; align-items:center; justify-content:center; color:#fff; font-size:11px; user-select:none; } .wrap.mini .bar{ display:none; } .wrap.mini .panel{ display:none !important; } .wrap.mini .dot{ display:flex; } .wrap.mini.peek .bar{ display:flex; } .wrap.mini.peek .dot{ display:none; } .col{ flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; overflow:hidden; } .note{ font-size:10px; color:#8a91a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .psearch{ padding:8px 10px 0; background:#14161b; display:flex; gap:6px; } .psearch input{ flex:1; min-width:0; border:1px solid #2b2f3a; background:#0f1116; color:#e7e9ee; border-radius:8px; padding:7px 9px; font-size:12px; outline:none; } .kwin{ flex:1; min-width:0; border:1px solid #2b2f3a; background:#0f1116; color:#e7e9ee; border-radius:8px; padding:8px 9px; font-size:12px; outline:none; } .fsel{ max-width:46%; border:1px solid #2b2f3a; background:#0f1116; color:#e7e9ee; border-radius:8px; padding:7px 6px; font-size:12px; outline:none; } [data-act=ab]{ width:auto !important; padding:0 9px; border-radius:17px !important; font-weight:700; font-size:12px; letter-spacing:.5px; } .list .row[draggable=true]{ cursor:grab; } .list .row.dragging{ opacity:.45; } .list .row.dragover{ box-shadow:inset 0 2px 0 #EC4899; } .list .ck{ width:14px; height:14px; accent-color:#EC4899; cursor:pointer; flex:0 0 auto; } .wrap.vert{ display:flex; align-items:flex-start; gap:8px; } .wrap.vert.edge-right{ flex-direction:row-reverse; } .wrap.vert .panel{ margin-top:0; } .wrap.vert .bar{ flex-direction:column; padding:9px 7px; } .wrap.vert .handle{ padding:2px 0; } .wrap.vert [data-act=speed]{ width:34px !important; padding:0; border-radius:50% !important; } .wrap.vert [data-act=ab]{ width:34px !important; padding:0; border-radius:50% !important; } .wrap.vert [data-act=vol]{ flex-direction:column-reverse; height:52px; border-radius:17px; } .wrap.vert [data-act=vol] .vh{ width:100%; flex:1 1 50%; } .wrap.vert [data-act=vol] .vsep{ width:auto; height:1px; margin:0 8px; align-self:stretch; } .list .grp{ display:flex; align-items:center; gap:8px; padding:7px 6px 3px; font-size:11px; font-weight:700; color:#9aa1ad; } .list .grp .cnt{ color:#6c7482; font-weight:400; }";
-  const HUD_HTML = "<div class='dot' title='Mở lại thanh điều khiển'><svg viewBox='0 0 24 24' fill='currentColor'><rect x='4' y='4' width='7' height='7' rx='1.6'/><rect x='13' y='4' width='7' height='7' rx='1.6'/><rect x='4' y='13' width='7' height='7' rx='1.6'/><rect x='13' y='13' width='7' height='7' rx='1.6'/></svg></div><div class='bar'><div class='handle' title='Kéo để di chuyển'>\u283F</div><button data-act='next' title='Clip tiếp theo (Alt+N)'><svg viewBox='0 0 24 24' fill='currentColor'><path d='M5.2 5.3v13.4c0 .9 1 1.4 1.7.9l9.4-6.7c.6-.4.6-1.4 0-1.8L6.9 4.4c-.7-.5-1.7 0-1.7.9z'/><rect x='17.2' y='4.8' width='2.4' height='14.4' rx='1.2'/></svg></button><button data-act='download' title='Tải video (Alt+D)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'><path d='M12 4.2v9.6'/><path d='M7.8 10l4.2 4.2L16.2 10'/><path d='M4.8 19.4h14.4'/></svg></button><button data-act='copy' title='Sao chép link sạch (Alt+C)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><path d='M10.4 13.6a4.4 4.4 0 006.2 0l2.6-2.6a4.4 4.4 0 00-6.2-6.2l-1.3 1.3'/><path d='M13.6 10.4a4.4 4.4 0 00-6.2 0l-2.6 2.6a4.4 4.4 0 006.2 6.2l1.3-1.3'/></svg></button><button data-act='fav' title='Yêu thích (Alt+F)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.9' stroke-linejoin='round'><path d='M12 3.7l2.7 5.4 5.9.8-4.3 4.2 1 5.9-5.3-2.8-5.3 2.8 1-5.9-4.3-4.2 5.9-.8z'/></svg></button><button data-act='pip' title='Phát nổi PiP (Alt+P)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><rect x='3.2' y='5' width='17.6' height='14' rx='2.2'/><rect x='11.6' y='11.4' width='6.4' height='4.4' rx='1' fill='currentColor' stroke='none'/></svg></button><button data-act='loop' title='Lặp lại clip (Alt+L)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'><path d='M4.9 12a7.1 7.1 0 0112.1-5l2.1 1.9'/><path d='M19.1 4.7v4.2h-4.2'/><path d='M19.1 12a7.1 7.1 0 01-12.1 5l-2.1-1.9'/><path d='M4.9 19.3v-4.2h4.2'/></svg></button><button data-act='ab' title='Lặp đoạn A–B (Alt+A)'>AB</button><button data-act='marathon' title='Marathon tác giả (Alt+M)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.9'><circle cx='12' cy='12' r='8.3'/><circle cx='12' cy='12' r='4.6'/><circle cx='12' cy='12' r='1.5' fill='currentColor' stroke='none'/></svg></button><button data-act='block' title='Chặn tác giả này (Alt+X)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.1'><circle cx='12' cy='12' r='8.3'/><path d='M6.3 6.3l11.4 11.4'/></svg></button><button data-act='speed' title='Tốc độ phát (Alt+S)'><span class='lbl'>1x</span></button><button data-act='vol' title='Âm lượng — nửa trái: giảm, nửa phải: tăng'><span class='vh' data-vol='down'>\u2212</span><span class='vsep'></span><span class='vh' data-vol='up'>+</span></button><button data-act='bulk' title='Danh sách tải & yêu thích (Alt+B)'><svg viewBox='0 0 24 24' fill='currentColor'><rect x='4' y='4' width='7' height='7' rx='1.6'/><rect x='13' y='4' width='7' height='7' rx='1.6'/><rect x='4' y='13' width='7' height='7' rx='1.6'/><rect x='13' y='13' width='7' height='7' rx='1.6'/></svg><span class='bulk-count'>0</span></button><button data-act='min' title='Thu nhỏ thành nút tròn (di chuột vào để mở tạm)'><svg class='ic-min' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.3' stroke-linecap='round'><path d='M5.5 12h13'/></svg><svg class='ic-plus' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.3' stroke-linecap='round'><path d='M12 5.5v13'/><path d='M5.5 12h13'/></svg></button></div><div class='panel'><div class='phead'><div class='tabs'><button data-tab='bulk' class='tab active'>Danh sách tải</button><button data-tab='fav' class='tab'>\u2B50 Yêu thích</button><button data-tab='block' class='tab'>\uD83D\uDEAB Chặn</button></div><button data-act='close' class='x'>\u2715</button></div><div class='psearch' style='display:none'><select class='fsel' title='Lọc theo thư mục'></select><input placeholder='Tìm theo tên hoặc ghi chú…'></div><div class='list'></div><div class='pfoot' data-foot='bulk'><button data-act='dlall' class='big'>\u2B73 Tải tất cả</button><button data-act='clear' class='ghost'>Xoá danh sách</button></div><div class='pfoot' data-foot='fav' style='display:none'><button data-act='favplay' class='big'>\u25B6 Phát tất cả</button><button data-act='favshuffle' class='ghost' title='Phát ngẫu nhiên (trộn thứ tự)'>\uD83D\uDD00</button><button data-act='favloop' class='ghost' title='Lặp vòng danh sách (phát hết tự quay lại đầu)'>\uD83D\uDD01</button><button data-act='favexport' class='ghost' title='Xuất file JSON'>\u2B73</button><button data-act='favimport' class='ghost' title='Nhập từ file JSON'>\u2B71</button><button data-act='favclear' class='ghost' title='Xoá hết danh sách'>\u2715</button></div><div class='pfoot' data-foot='block' style='display:none'><input class='kwin' placeholder='Chặn từ khóa…' style='flex:1;min-width:0'><button data-act='kwadd' class='mini' style='padding:8px 10px'>Thêm</button><button data-act='blockunsel' class='mini' style='padding:8px 10px;background:#dc2626;color:#fff;font-weight:700;display:none' title='Bỏ chặn các mục đã chọn'>Bỏ chọn</button><button data-act='blockexport' class='ghost' title='Xuất danh sách chặn (JSON)'>\u2B73</button><button data-act='blockimport' class='ghost' title='Nhập danh sách chặn từ file JSON'>\u2B71</button><button data-act='blocksync' class='ghost' title='Đồng bộ danh sách chặn từ xa (URL)'>\uD83D\uDD04</button><button data-act='blockfbpage' class='ghost' title='Mở trang cài đặt chặn của Facebook'>\uD83D\uDD17</button><button data-act='blockclear' class='ghost' title='Bỏ chặn tất cả (tác giả + từ khóa)'>\u2715</button></div></div>";
+  const HUD_HTML = "<div class='dot' title='Mở lại thanh điều khiển'><svg viewBox='0 0 24 24' fill='currentColor'><rect x='4' y='4' width='7' height='7' rx='1.6'/><rect x='13' y='4' width='7' height='7' rx='1.6'/><rect x='4' y='13' width='7' height='7' rx='1.6'/><rect x='13' y='13' width='7' height='7' rx='1.6'/></svg></div><div class='bar'><div class='handle' title='Kéo để di chuyển'>\u283F</div><button data-act='next' title='Clip tiếp theo (Alt+N)'><svg viewBox='0 0 24 24' fill='currentColor'><path d='M5.2 5.3v13.4c0 .9 1 1.4 1.7.9l9.4-6.7c.6-.4.6-1.4 0-1.8L6.9 4.4c-.7-.5-1.7 0-1.7.9z'/><rect x='17.2' y='4.8' width='2.4' height='14.4' rx='1.2'/></svg></button><button data-act='download' title='Tải video (Alt+D)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'><path d='M12 4.2v9.6'/><path d='M7.8 10l4.2 4.2L16.2 10'/><path d='M4.8 19.4h14.4'/></svg></button><button data-act='copy' title='Sao chép link sạch (Alt+C)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><path d='M10.4 13.6a4.4 4.4 0 006.2 0l2.6-2.6a4.4 4.4 0 00-6.2-6.2l-1.3 1.3'/><path d='M13.6 10.4a4.4 4.4 0 00-6.2 0l-2.6 2.6a4.4 4.4 0 006.2 6.2l1.3-1.3'/></svg></button><button data-act='fav' title='Yêu thích (Alt+F)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.9' stroke-linejoin='round'><path d='M12 3.7l2.7 5.4 5.9.8-4.3 4.2 1 5.9-5.3-2.8-5.3 2.8 1-5.9-4.3-4.2 5.9-.8z'/></svg></button><button data-act='pip' title='Phát nổi PiP (Alt+P)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><rect x='3.2' y='5' width='17.6' height='14' rx='2.2'/><rect x='11.6' y='11.4' width='6.4' height='4.4' rx='1' fill='currentColor' stroke='none'/></svg></button><button data-act='loop' title='Lặp lại clip (Alt+L)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'><path d='M4.9 12a7.1 7.1 0 0112.1-5l2.1 1.9'/><path d='M19.1 4.7v4.2h-4.2'/><path d='M19.1 12a7.1 7.1 0 01-12.1 5l-2.1-1.9'/><path d='M4.9 19.3v-4.2h4.2'/></svg></button><button data-act='ab' title='Lặp đoạn A–B (Alt+A)'>AB</button><button data-act='marathon' title='Marathon tác giả (Alt+M)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.9'><circle cx='12' cy='12' r='8.3'/><circle cx='12' cy='12' r='4.6'/><circle cx='12' cy='12' r='1.5' fill='currentColor' stroke='none'/></svg></button><button data-act='block' title='Chặn tác giả này (Alt+X)'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.1'><circle cx='12' cy='12' r='8.3'/><path d='M6.3 6.3l11.4 11.4'/></svg></button><button data-act='speed' title='Tốc độ phát (Alt+S)'><span class='lbl'>1x</span></button><button data-act='vol' title='Âm lượng — nửa trái: giảm, nửa phải: tăng'><span class='vh' data-vol='down'>\u2212</span><span class='vsep'></span><span class='vh' data-vol='up'>+</span></button><button data-act='bulk' title='Danh sách tải & yêu thích (Alt+B)'><svg viewBox='0 0 24 24' fill='currentColor'><rect x='4' y='4' width='7' height='7' rx='1.6'/><rect x='13' y='4' width='7' height='7' rx='1.6'/><rect x='4' y='13' width='7' height='7' rx='1.6'/><rect x='13' y='13' width='7' height='7' rx='1.6'/></svg><span class='bulk-count'>0</span></button><button data-act='min' title='Thu nhỏ thành nút tròn (di chuột vào để mở tạm)'><svg class='ic-min' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.3' stroke-linecap='round'><path d='M5.5 12h13'/></svg><svg class='ic-plus' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.3' stroke-linecap='round'><path d='M12 5.5v13'/><path d='M5.5 12h13'/></svg></button></div><div class='panel'><div class='phead'><div class='tabs'><button data-tab='bulk' class='tab active'>Danh sách tải</button><button data-tab='fav' class='tab'>\u2B50 Yêu thích</button><button data-tab='block' class='tab'>\uD83D\uDEAB Chặn mềm</button><button data-tab='fbblock' class='tab' style='color:#60a5fa;'>\uD83D\uDD12 Chặn trên FB</button></div><button data-act='close' class='x'>\u2715</button></div><div class='psearch' style='display:none'><select class='fsel' title='Lọc theo thư mục'></select><input placeholder='Tìm theo tên hoặc ghi chú…'></div><div class='list'></div><div class='pfoot' data-foot='bulk'><button data-act='dlall' class='big'>\u2B73 Tải tất cả</button><button data-act='clear' class='ghost'>Xoá danh sách</button></div><div class='pfoot' data-foot='fav' style='display:none'><button data-act='favplay' class='big'>\u25B6 Phát tất cả</button><button data-act='favshuffle' class='ghost' title='Phát ngẫu nhiên (trộn thứ tự)'>\uD83D\uDD00</button><button data-act='favloop' class='ghost' title='Lặp vòng danh sách (phát hết tự quay lại đầu)'>\uD83D\uDD01</button><button data-act='favexport' class='ghost' title='Xuất file JSON'>\u2B73</button><button data-act='favimport' class='ghost' title='Nhập từ file JSON'>\u2B71</button><button data-act='favclear' class='ghost' title='Xoá hết danh sách'>\u2715</button></div><div class='pfoot' data-foot='block' style='display:none'><input class='kwin' placeholder='Chặn từ khóa…' style='flex:1;min-width:0'><button data-act='kwadd' class='mini' style='padding:8px 10px'>Thêm</button><button data-act='blockunsel' class='mini' style='padding:8px 10px;background:#dc2626;color:#fff;font-weight:700;display:none' title='Bỏ chặn các mục đã chọn'>Bỏ chọn</button><button data-act='blockexport' class='ghost' title='Xuất danh sách chặn (JSON)'>\u2B73</button><button data-act='blockimport' class='ghost' title='Nhập danh sách chặn từ file JSON'>\u2B71</button><button data-act='blocksync' class='ghost' title='Đồng bộ danh sách chặn từ xa (URL)'>\uD83D\uDD04</button><button data-act='blockfbpage' class='ghost' title='Mở trang cài đặt chặn của Facebook'>\uD83D\uDD17</button><button data-act='blockclear' class='ghost' title='Bỏ chặn tất cả (tác giả + từ khóa)'>\u2715</button></div><div class='pfoot' data-foot='fbblock' style='display:none'><input class='fbin' placeholder='Tìm kiếm Trang/User đã chặn trên FB…' style='flex:1;min-width:0'><button data-act='fbblocksync' class='mini' style='padding:8px 12px;background:#2563eb;color:#fff;font-weight:700' title='Đồng bộ lại danh sách từ Facebook'>\uD83D\uDD04 Đồng bộ FB</button><button data-act='blockfbpage' class='ghost' title='Mở cài đặt chặn Facebook'>\uD83D\uDD17</button></div></div>";
 
   let hudRoot = null, shadow = null, els = {}, panelOpen = false;
   let activeTab = 'bulk';
@@ -1679,31 +1726,24 @@
     els.dot = shadow.querySelector('.dot');
     if (els.dot) els.dot.addEventListener('click', () => setHudMini(false));
     els.blockBtn = shadow.querySelector('[data-act=block]');
-    let blockPressTimer = null;
-    let blockLongPressed = false;
     if (els.blockBtn) {
-      const startPress = () => {
-        blockLongPressed = false;
-        blockPressTimer = setTimeout(() => {
-          blockLongPressed = true;
-          hardBlockFacebookPage();
-        }, 700);
-      };
-      const cancelPress = () => {
-        clearTimeout(blockPressTimer);
-      };
-      els.blockBtn.addEventListener('mousedown', startPress);
-      els.blockBtn.addEventListener('mouseup', cancelPress);
-      els.blockBtn.addEventListener('mouseleave', cancelPress);
-      els.blockBtn.addEventListener('touchstart', startPress, { passive: true });
-      els.blockBtn.addEventListener('touchend', cancelPress);
       els.blockBtn.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        hardBlockFacebookPage();
+        if (isFacebook) hardBlockFacebookPage(false);
+        else toggleBlockAuthor();
       });
     }
     els.footBlock = shadow.querySelector('[data-foot=block]');
+    els.footFbBlock = shadow.querySelector('[data-foot=fbblock]');
+    els.fbInput = shadow.querySelector('.fbin');
+    if (els.fbInput) {
+      els.fbInput.addEventListener('keydown', (e) => e.stopPropagation());
+      els.fbInput.addEventListener('input', () => {
+        fbBlockSearchQ = els.fbInput.value || '';
+        if (activeTab === 'fbblock') renderFbBlock();
+      });
+    }
     els.searchWrap = shadow.querySelector('.psearch');
     els.favSearch = shadow.querySelector('.psearch input');
     if (els.favSearch) {
@@ -1751,8 +1791,8 @@
         else if (a === 'favplay') { if (favQueue && favQueue.active) stopFavPlayback(); else startFavPlayback(); }
         else if (a === 'min') setHudMini(!hudMini);
         else if (a === 'block') {
-          if (blockLongPressed) { blockLongPressed = false; return; }
-          toggleBlockAuthor();
+          if (isFacebook) showBlockMenuFacebook();
+          else toggleBlockAuthor();
         }
         else if (a === 'copy') copyCleanLink();
         else if (a === 'ab') cycleAbLoop();
@@ -1763,6 +1803,7 @@
         else if (a === 'blockexport') exportBlocklist();
         else if (a === 'blockimport') importBlocklist();
         else if (a === 'blocksync') syncRemoteBlocklist(true);
+        else if (a === 'fbblocksync') syncFbBlockedAccounts(true);
         else if (a === 'blockfbpage') window.open('https://www.facebook.com/settings?tab=blocking', '_blank');
         else if (a === 'blockclear') { blockedAuthors = []; blockedKeywords = []; saveBlocked(); renderPanel(); refreshHud(); }
         else if (a === 'favclear') { favorites = []; favIdsSync = new Set(); saveFavorites(); renderPanel(); refreshHud(); }
@@ -1894,17 +1935,20 @@
     else if (panelOpen) renderPanel();
   }
   function setTab(t) {
-    activeTab = (t === 'fav' || t === 'block') ? t : 'bulk';
+    activeTab = (t === 'fav' || t === 'block' || t === 'fbblock') ? t : 'bulk';
     if (els.tabs) els.tabs.forEach((tb) => tb.classList.toggle('active', tb.getAttribute('data-tab') === activeTab));
     if (els.footBulk) els.footBulk.style.display = activeTab === 'bulk' ? 'flex' : 'none';
     if (els.footFav) els.footFav.style.display = activeTab === 'fav' ? 'flex' : 'none';
     if (els.footBlock) els.footBlock.style.display = activeTab === 'block' ? 'flex' : 'none';
+    if (els.footFbBlock) els.footFbBlock.style.display = activeTab === 'fbblock' ? 'flex' : 'none';
     if (els.searchWrap) els.searchWrap.style.display = activeTab === 'fav' ? 'flex' : 'none';
     renderPanel();
+    if (activeTab === 'fbblock' && !fbBlockedAccounts.length) syncFbBlockedAccounts(false);
   }
   function renderPanel() {
     if (activeTab === 'fav') renderFav();
     else if (activeTab === 'block') renderBlock();
+    else if (activeTab === 'fbblock') renderFbBlock();
     else renderBulk();
   }
   function renderBulk() {
@@ -2454,6 +2498,98 @@
       els.list.appendChild(row);
     });
   }
+
+  // ---------- Quản lý danh sách chặn trên Facebook (Native Facebook Block Manager) ----------
+  let fbBlockedAccounts = [];
+  let fbBlockSearchQ = '';
+  try {
+    chrome.storage?.local?.get({ fbBlockedAccounts: [] }, (r) => {
+      if (r && Array.isArray(r.fbBlockedAccounts)) fbBlockedAccounts = r.fbBlockedAccounts;
+    });
+  } catch {}
+
+  function syncFbBlockedAccounts(manual = true) {
+    if (manual) toast('Đang đồng bộ danh sách chặn từ Facebook...', 4000);
+    chrome.runtime.sendMessage({ type: 'AUTONEXT_FB_SYNC_BLOCKS' }, (res) => {
+      if (!res || !res.ok) {
+        if (manual) toast('❌ Không thể đồng bộ: ' + (res?.error || 'Lỗi kết nối'), 4000);
+        return;
+      }
+      fbBlockedAccounts = res.items || [];
+      try {
+        chrome.storage?.local?.set({ fbBlockedAccounts });
+      } catch {}
+      if (activeTab === 'fbblock') renderFbBlock();
+      if (manual) toast('✅ Đã đồng bộ ' + fbBlockedAccounts.length + ' tài khoản từ Facebook!', 4000);
+    });
+  }
+
+  function renderFbBlock() {
+    if (!els.list) return;
+    els.list.textContent = '';
+    const q = fbBlockSearchQ.trim().toLowerCase();
+    let items = [...fbBlockedAccounts];
+    if (q) items = items.filter(it => (it.name || '').toLowerCase().includes(q) || (it.subtitle || '').toLowerCase().includes(q));
+
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      if (fbBlockedAccounts.length && q) {
+        empty.textContent = 'Không tìm thấy tài khoản nào khớp với "' + q + '".';
+      } else {
+        empty.append(
+          'Chưa có dữ liệu danh sách chặn từ Facebook.',
+          document.createElement('br'),
+          'Bấm nút 🔄 bên dưới để đồng bộ danh sách Trang/User bạn đang chặn trên Facebook.'
+        );
+      }
+      els.list.appendChild(empty);
+      return;
+    }
+
+    items.forEach((it, i) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+
+      const ix = document.createElement('span');
+      ix.className = 'ix';
+      ix.textContent = String(i + 1);
+
+      const col = document.createElement('div');
+      col.className = 'col';
+      const ttl = document.createElement('span');
+      ttl.className = 'ttl';
+      ttl.textContent = it.name;
+      const nt = document.createElement('span');
+      nt.className = 'note';
+      nt.textContent = it.subtitle || 'Tài khoản Facebook';
+      col.append(ttl, nt);
+
+      const unBtn = document.createElement('button');
+      unBtn.className = 'mini';
+      unBtn.style.cssText = 'background:rgba(220,38,38,0.2);color:#ef4444;border:1px solid rgba(220,38,38,0.4);font-weight:600;padding:4px 8px;cursor:pointer;';
+      unBtn.textContent = 'Bỏ chặn';
+      unBtn.title = 'Bỏ chặn ' + it.name + ' trên tài khoản Facebook';
+      unBtn.addEventListener('click', () => {
+        if (!confirm('Bạn có chắc muốn BỎ CHẶN ' + it.name + ' trên tài khoản Facebook không?')) return;
+        toast('Đang gửi lệnh bỏ chặn ' + it.name + ' lên Facebook...', 3500);
+        chrome.runtime.sendMessage({ type: 'AUTONEXT_FB_UNBLOCK', name: it.name }, (res) => {
+          if (res && res.ok) {
+            fbBlockedAccounts = fbBlockedAccounts.filter(x => x.name !== it.name);
+            try { chrome.storage?.local?.set({ fbBlockedAccounts }); } catch {}
+            renderFbBlock();
+            toast('✅ Đã bỏ chặn ' + it.name + ' trên Facebook!', 3500);
+          } else {
+            toast('❌ Lỗi khi bỏ chặn: ' + (res?.error || 'Không thực hiện được'), 4000);
+          }
+        });
+      });
+
+      row.append(ix, col, unBtn);
+      els.list.appendChild(row);
+    });
+  }
+
   // ---------- tải hàng loạt thông minh ----------
   // Sổ ghi clip đã tải xong (chống tải trùng giữa các phiên).
   let dlDone = {};

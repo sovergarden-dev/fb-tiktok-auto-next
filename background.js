@@ -286,6 +286,169 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
+    if (message?.type === 'AUTONEXT_FB_SYNC_BLOCKS') {
+      let tabId = null;
+      try {
+        const tab = await chrome.tabs.create({ url: 'https://www.facebook.com/settings?tab=blocking', active: false });
+        tabId = tab.id;
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, 9000);
+          const listener = (tid, info) => {
+            if (tid === tabId && info.status === 'complete') {
+              clearTimeout(timeout);
+              chrome.tabs.onUpdated.removeListener(listener);
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(listener);
+        });
+
+        await new Promise(r => setTimeout(r, 1600));
+
+        const results = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: () => {
+            const list = [];
+            const dialog = document.querySelector('div[role="dialog"]') || document.body;
+            const unblockBtns = Array.from(dialog.querySelectorAll('div[role="button"], button')).filter(b => {
+              const t = (b.textContent || '').trim().toLowerCase();
+              const a = (b.getAttribute('aria-label') || '').trim().toLowerCase();
+              return t === 'bỏ chặn' || t === 'unblock' || a === 'bỏ chặn' || a === 'unblock';
+            });
+
+            for (const btn of unblockBtns) {
+              let row = btn.parentElement;
+              for (let i = 0; i < 6 && row && row !== dialog; i++) {
+                const textNodes = Array.from(row.querySelectorAll('span[dir="auto"], div[dir="auto"]')).map(s => (s.textContent || '').trim()).filter(Boolean);
+                if (textNodes.length >= 1) {
+                  const name = textNodes[0];
+                  if (name && name.toLowerCase() !== 'bỏ chặn' && !name.toLowerCase().includes('danh sách') && !name.toLowerCase().includes('chặn')) {
+                    const subtitle = textNodes.length > 1 ? textNodes[1] : '';
+                    const img = row.querySelector('image, img');
+                    const avatar = img ? (img.getAttribute('xlink:href') || img.getAttribute('src') || '') : '';
+                    list.push({ name, subtitle, avatar });
+                    break;
+                  }
+                }
+                row = row.parentElement;
+              }
+            }
+
+            if (!list.length) {
+              const scripts = Array.from(document.querySelectorAll('script')).map(s => s.textContent || '');
+              for (const sc of scripts) {
+                if (sc.includes('blocked_users') || sc.includes('blocked_pages') || sc.includes('CometSettingsBlocking')) {
+                  const nameMatches = sc.matchAll(/"name"\s*:\s*"([^"]{2,50})"[^}]*?"id"\s*:\s*"(\d+)"/g);
+                  for (const nm of nameMatches) {
+                    if (nm[1] && !list.some(x => x.name === nm[1])) {
+                      list.push({ name: nm[1], id: nm[2], subtitle: 'Tài khoản FB', avatar: '' });
+                    }
+                  }
+                }
+              }
+            }
+
+            return list;
+          }
+        });
+
+        const items = (results && results[0] && results[0].result) || [];
+        sendResponse({ ok: true, items });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      } finally {
+        if (tabId) {
+          try { chrome.tabs.remove(tabId); } catch {}
+        }
+      }
+      return;
+    }
+
+    if (message?.type === 'AUTONEXT_FB_UNBLOCK') {
+      let tabId = null;
+      try {
+        const targetName = (message.name || '').trim().toLowerCase();
+        if (!targetName) {
+          sendResponse({ ok: false, error: 'Thiếu tên tài khoản cần bỏ chặn' });
+          return;
+        }
+
+        const tab = await chrome.tabs.create({ url: 'https://www.facebook.com/settings?tab=blocking', active: false });
+        tabId = tab.id;
+
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, 9000);
+          const listener = (tid, info) => {
+            if (tid === tabId && info.status === 'complete') {
+              clearTimeout(timeout);
+              chrome.tabs.onUpdated.removeListener(listener);
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(listener);
+        });
+
+        await new Promise(r => setTimeout(r, 1600));
+
+        const res = await chrome.scripting.executeScript({
+          target: { tabId },
+          args: [targetName],
+          func: async (nameToUnblock) => {
+            const dialog = document.querySelector('div[role="dialog"]') || document.body;
+            const unblockBtns = Array.from(dialog.querySelectorAll('div[role="button"], button')).filter(b => {
+              const t = (b.textContent || '').trim().toLowerCase();
+              const a = (b.getAttribute('aria-label') || '').trim().toLowerCase();
+              return t === 'bỏ chặn' || t === 'unblock' || a === 'bỏ chặn' || a === 'unblock';
+            });
+
+            let targetBtn = null;
+            for (const btn of unblockBtns) {
+              let row = btn.parentElement;
+              for (let i = 0; i < 6 && row && row !== dialog; i++) {
+                const text = (row.textContent || '').toLowerCase();
+                if (text.includes(nameToUnblock)) {
+                  targetBtn = btn;
+                  break;
+                }
+                row = row.parentElement;
+              }
+              if (targetBtn) break;
+            }
+
+            if (!targetBtn) return { ok: false, error: 'Không tìm thấy nút Bỏ chặn cho ' + nameToUnblock };
+
+            targetBtn.click();
+            await new Promise(r => setTimeout(r, 800));
+
+            const confirmDlgs = Array.from(document.querySelectorAll('div[role="dialog"]'));
+            for (const dlg of confirmDlgs) {
+              const cBtns = Array.from(dlg.querySelectorAll('div[role="button"], button'));
+              for (const cb of cBtns) {
+                const t = (cb.textContent || '').trim().toLowerCase();
+                const a = (cb.getAttribute('aria-label') || '').trim().toLowerCase();
+                if (t === 'xác nhận' || t === 'confirm' || a === 'xác nhận' || a === 'confirm') {
+                  cb.click();
+                  await new Promise(r => setTimeout(r, 1000));
+                  return { ok: true };
+                }
+              }
+            }
+            return { ok: true };
+          }
+        });
+
+        const outcome = res && res[0] && res[0].result;
+        sendResponse(outcome || { ok: false, error: 'Thao tác không thành công' });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      } finally {
+        if (tabId) {
+          try { chrome.tabs.remove(tabId); } catch {}
+        }
+      }
+      return;
+    }
+
     sendResponse({ ok: false });
   })();
   return true;

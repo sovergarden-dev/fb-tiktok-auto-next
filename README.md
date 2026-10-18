@@ -33,6 +33,23 @@ Chrome sẽ **tạm dừng video** trong cửa sổ bị thu nhỏ (minimize) ho
 - Có thể dùng tính năng **Picture-in-Picture** hoặc chia đôi màn hình.
 - Nếu video vẫn chạy (có tiếng), extension sẽ chuyển video bình thường dù tab không được focus.
 
+## Nhật ký cập nhật (v3.18.0 — Nâng cấp Toàn diện Chặn Cứng Facebook & Quản lý Danh sách Chặn FB Native)
+
+1. **Hộp thoại Lựa chọn Chặn Trực quan**: Khi bấm nút `🚫` trên Facebook Reels, tiện ích hiển thị hộp thoại xác nhận rõ ràng:
+   - **Bấm [OK]**: Chạy Macro CHẶN CỨNG trên Facebook (tự động mở menu và chặn nick vĩnh viễn).
+   - **Bấm [Hủy]**: CHẶN MỀM (chỉ tự động lướt qua clip trên tiện ích).
+   - Loại bỏ hoàn toàn cơ chế giữ chuột 700ms 2 lần dễ gây nhầm lẫn.
+2. **Hoàn thiện Macro Chặn Cứng Facebook**:
+   - Tự động tìm nút `...` (3 chấm) trên cả Facebook Reels và Profile/Fanpage.
+   - Click "Chặn" $\rightarrow$ Click "Xác nhận" (Hộp thoại 1).
+   - **Tự động đóng Hộp thoại 2** ("Bạn đã chặn [Tên]") bằng cách bấm nút "Đóng" để dọn sạch màn hình, không bị kẹt video.
+   - Tự động lướt sang clip kế tiếp sau khi hoàn tất.
+3. **Tab Quản lý Chặn trên Facebook (Facebook Native Block Manager)**:
+   - Bổ sung tab **"🔒 Chặn trên FB"** ngay trong bảng điều khiển HUD.
+   - **Đồng bộ tự động**: Nút `🔄 Đồng bộ FB` tự động đọc danh sách các Trang và Trang cá nhân bạn đang chặn trên nick Facebook thực tế.
+   - **Tìm kiếm tức thì**: Lọc theo tên người/trang đã chặn ngay lập tức.
+   - **Bỏ chặn 1-Click**: Bấm nút `[Bỏ chặn]` cạnh từng tài khoản để tiện ích tự động gỡ chặn trên Facebook mà không cần vào mục Cài đặt FB.
+
 ## Nhật ký cập nhật (v3.17.0 — Watchdog Cứu hộ Kẹt Video, X/Twitter Feed, Chuyển Clip Êm & Đồng bộ Chặn Online)
 
 1. **Watchdog Timer cứu hộ chống kẹt video (Freeze/Stalled Rescue)**: Tự động giám sát luồng phát. Nếu video đang mở nhưng `currentTime` bị đứng yên quá 10 giây (do mạng nghẽn, buffering quay vòng vô tận hoặc clip bị xóa), tiện ích tự động kích hoạt chuyển tiếp cứu hộ, loại bỏ hoàn toàn tình trạng kẹt video vĩnh viễn.

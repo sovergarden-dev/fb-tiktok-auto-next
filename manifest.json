@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Auto Next – Reels, TikTok & Shorts",
-  "version": "3.17.0",
+  "version": "3.18.0",
   "description": "Tự động chuyển sang video kế tiếp khi hết clip trên Facebook Reels, TikTok, YouTube Shorts, Instagram Reels và X (Twitter) Videos.",
-  "permissions": ["storage", "scripting", "downloads"],
+  "permissions": ["storage", "scripting", "downloads", "tabs"],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://m.facebook.com/*",

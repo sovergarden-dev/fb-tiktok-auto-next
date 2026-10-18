@@ -513,7 +513,9 @@
     const st = { rec, chunks: [], video: v, prevMuted: v.muted, holdBefore: !!window.__anLoopHold, lastT: 0, save: true, timer: 0 };
     recState = st;
     window.__anLoopHold = true; // chặn tự lướt trong lúc ghi
-    try { v.muted = false; } catch {} // để bản ghi có tiếng
+    if ((typeof navigator !== 'undefined' && navigator.userActivation && navigator.userActivation.hasBeenActive) || Date.now() - lastGestureAt < 60000) {
+      try { v.muted = false; } catch {} // để bản ghi có tiếng
+    }
     rec.ondataavailable = (e) => { if (e.data && e.data.size) st.chunks.push(e.data); };
     rec.onstop = () => {
       window.__anLoopHold = st.holdBefore;
@@ -1519,15 +1521,34 @@
   // Đổi mute/unmute ĐỒNG BỘ với UI của trang: bấm chính nút loa của FB (nếu thấy)
   // để state nội bộ của FB cập nhật + tự ghi nhớ cho clip sau; rồi chốt lại trên thẻ video.
   function setMutedSynced(v, wantMuted) {
+    if (!v) return;
     volOwnChangeUntil = Date.now() + 900;
     if (isFacebook) {
       const b = findSiteMuteToggle(v, wantMuted);
       if (b) { try { b.click(); } catch {} noteFeature('volSync', true); }
     }
-    try { v.muted = wantMuted; } catch {}
+    // Bảo vệ theo Autoplay & Unmute Policy của trình duyệt:
+    // Chrome cấm script tự bật tiếng (v.muted = false) khi người dùng chưa tương tác với tài liệu.
+    // Nếu ép bật tiếng khi chưa có user gesture, Chrome sẽ tự dừng video và ném ngoại lệ Console:
+    // "Unmuting failed and the element was paused instead because the user didn't interact with the document before."
+    if (!wantMuted) {
+      const hasGesture = (typeof navigator !== 'undefined' && navigator.userActivation && navigator.userActivation.hasBeenActive) || (Date.now() - lastGestureAt < 60000);
+      if (!hasGesture) {
+        // Chưa có tương tác người dùng trên tab này -> không ép v.muted = false để tránh bị Chrome dừng video và báo lỗi đỏ
+        return;
+      }
+    }
+    try {
+      const wasPaused = v.paused;
+      v.muted = wantMuted;
+      if (!wantMuted && !wasPaused && v.paused) {
+        v.muted = true;
+        try { v.play().catch(() => {}); } catch {}
+      }
+    } catch {}
     if (!wantMuted && userVolume != null && userVolume > 0) {
       try { v.volume = userVolume; } catch {}
-      // FB có thể đặt l���i volume ngay sau cú click → chốt thêm một nhịp nữa
+      // FB có thể đặt lại volume ngay sau cú click → chốt thêm một nhịp nữa
       setTimeout(() => { volOwnChangeUntil = Date.now() + 300; try { if (!v.muted) v.volume = userVolume; } catch {} }, 150);
     }
   }
@@ -1567,7 +1588,8 @@
     if (!v || volApplied.has(v)) return;
     volApplied.add(v);
     watchVolume(v);
-    if (userUnmuted === true && v.muted) setMutedSynced(v, false);
+    const hasGesture = (typeof navigator !== 'undefined' && navigator.userActivation && navigator.userActivation.hasBeenActive) || (Date.now() - lastGestureAt < 60000);
+    if (userUnmuted === true && v.muted && hasGesture) setMutedSynced(v, false);
     else if (userUnmuted === false && !v.muted) setMutedSynced(v, true);
     if (userVolume != null && userVolume > 0) { volOwnChangeUntil = Date.now() + 900; try { v.volume = userVolume; } catch {} }
   }

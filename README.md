@@ -33,6 +33,11 @@ Chrome sẽ **tạm dừng video** trong cửa sổ bị thu nhỏ (minimize) ho
 - Có thể dùng tính năng **Picture-in-Picture** hoặc chia đôi màn hình.
 - Nếu video vẫn chạy (có tiếng), extension sẽ chuyển video bình thường dù tab không được focus.
 
+## Nhật ký cập nhật (v3.18.1 — Vá lỗi Chrome Autoplay & Unmuting Policy)
+
+1. **Khắc phục lỗi Unmuting Policy của Chrome**: Thêm chốt chặn kiểm tra quyền tương tác người dùng (`navigator.userActivation`) trước khi thực hiện bật tiếng (`v.muted = false`) trong `setMutedSynced` và `enforceVolume`. Loại bỏ hoàn toàn ngoại lệ DOMException *"Unmuting failed and the element was paused instead"* và dọn sạch cảnh báo đỏ "Lỗi" trên trang quản lý extension của Chrome.
+2. **Khôi phục trạng thái phát video an toàn**: Nếu trình duyệt can thiệp dừng video khi unmute, tiện ích tự động phát hiện và khôi phục chế độ mute để video tiếp tục phát bình thường, không bị gián đoạn trải nghiệm người dùng.
+
 ## Nhật ký cập nhật (v3.18.0 — Nâng cấp Toàn diện Chặn Cứng Facebook & Quản lý Danh sách Chặn FB Native)
 
 1. **Hộp thoại Lựa chọn Chặn Trực quan**: Khi bấm nút `🚫` trên Facebook Reels, tiện ích hiển thị hộp thoại xác nhận rõ ràng:

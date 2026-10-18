@@ -33,6 +33,14 @@ Chrome sẽ **tạm dừng video** trong cửa sổ bị thu nhỏ (minimize) ho
 - Có thể dùng tính năng **Picture-in-Picture** hoặc chia đôi màn hình.
 - Nếu video vẫn chạy (có tiếng), extension sẽ chuyển video bình thường dù tab không được focus.
 
+## Nhật ký cập nhật (v3.19.0 — GitHub Actions CI/CD, Tự Lướt Nhạc Bản Quyền, Smart Badge & Instagram Macro)
+
+1. **Quy trình CI/CD & Tự động đóng gói Release**: Tích hợp GitHub Actions workflow (`.github/workflows/ci.yml`). Tự động chạy kiểm tra cú pháp JavaScript và tính hợp lệ của `manifest.json`. Khi tạo Git tag phiên bản mới (ví dụ `v3.19.0`), hệ thống tự động nén toàn bộ mã nguồn sạch thành tệp `.zip` và phát hành trực tiếp trên GitHub Releases.
+2. **Tự động lướt video bị tắt tiếng do bản quyền (Copyright Audio Skip)**: Nhận diện chính xác các nhãn cảnh báo âm thanh bị gỡ hoặc tắt tiếng do bản quyền trên TikTok, Facebook Reels và Instagram Reels, tự động lướt qua video tiếp theo sau 0.8 giây để không gián đoạn trải nghiệm xem. Có công tắc bật/tắt riêng trong Popup.
+3. **Huy hiệu thông báo lý do lướt clip (Smart Skip Badge)**: Hiển thị một nhãn nhỏ tinh tế (badge) mờ dần trong 1.8 giây ở đầu video để bạn luôn nắm được nguyên nhân tiện ích tự chuyển clip (`🚫 Kênh bị chặn`, `📢 Quảng cáo`, `🔇 Nhạc tắt bản quyền`, `⏱️ Cứu hộ kẹt video`, v.v.). Có thể bật/tắt tùy ý trong Popup.
+4. **Chế độ Siêu tiết kiệm tài nguyên khi Tab ẩn (Background Idle Saver)**: Khi tab bị ẩn và video không phát (hoặc đang tạm dừng), nhịp quét tự động giãn ra 4000ms và tạm ngắt toàn bộ thao tác đo đạc DOM không cần thiết, giúp tiết kiệm tối đa CPU/RAM và pin máy tính.
+5. **Mở rộng Macro sang Instagram Reels**: Khi bấm nút `🚫` trên Instagram Reels, tiện ích cung cấp lựa chọn tự động click menu 3 chấm để đánh dấu *"Không quan tâm"* (Not Interested) hoặc *"Chặn"* trực tiếp trên Instagram.
+
 ## Nhật ký cập nhật (v3.18.1 — Vá lỗi Chrome Autoplay & Unmuting Policy)
 
 1. **Khắc phục lỗi Unmuting Policy của Chrome**: Thêm chốt chặn kiểm tra quyền tương tác người dùng (`navigator.userActivation`) trước khi thực hiện bật tiếng (`v.muted = false`) trong `setMutedSynced` và `enforceVolume`. Loại bỏ hoàn toàn ngoại lệ DOMException *"Unmuting failed and the element was paused instead"* và dọn sạch cảnh báo đỏ "Lỗi" trên trang quản lý extension của Chrome.

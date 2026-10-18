@@ -18,7 +18,9 @@
     liteMode: false,
     bulkLimit: 100,
     playbackRate: 1,
-    remoteBlocklistUrl: ''
+    remoteBlocklistUrl: '',
+    copyrightMutedSkip: false,
+    showSkipBadge: true
   };
   let settings = { ...DEFAULTS };
 
@@ -1121,6 +1123,96 @@
       toggleBlockAuthor();
     }
   }
+  function showBlockMenuInstagram() {
+    const a = (window.__autoNextApi && typeof window.__autoNextApi.author === 'function' ? window.__autoNextApi.author() : currentAuthor()) || 'tác giả này';
+    const choice = confirm(
+      'QUẢN LÝ REELS TRÊN INSTAGRAM: ' + a + '\n\n' +
+      '• Bấm [OK]: TỰ ĐỘNG CHỌN "KHÔNG QUAN TÂM" trên Instagram (để thuật toán giảm phân phối nội dung tương tự).\n\n' +
+      '• Bấm [Hủy]: CHẶN MỀM (Chỉ tự động lướt qua clip trên tiện ích này).'
+    );
+    if (choice) {
+      hardNotInterestedInstagram();
+    } else {
+      toggleBlockAuthor();
+    }
+  }
+
+  async function hardNotInterestedInstagram() {
+    const api = window.__autoNextApi;
+    const v = api && typeof api.getActiveVideo === 'function' ? api.getActiveVideo() : document.querySelector('video');
+    try { if (v && !v.paused) v.pause(); } catch {}
+    toast('Đang thực hiện đánh dấu Không quan tâm trên Instagram...', 3000);
+
+    try {
+      const optLabels = ['thêm tùy chọn', 'tùy chọn khác', 'more options', 'options'];
+      let optBtn = null;
+      const candidates = Array.from(document.querySelectorAll('[aria-label], [role="button"][aria-label], svg[aria-label]'));
+      for (const el of candidates) {
+        const lbl = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+        if (optLabels.some(l => lbl === l || lbl.includes(l))) {
+          const btn = el.closest('[role="button"]') || el;
+          if (btn.offsetWidth > 0 || btn.offsetHeight > 0) {
+            optBtn = btn;
+            break;
+          }
+        }
+      }
+
+      if (!optBtn) {
+        toast('Không tìm thấy nút 3 chấm của Reel trên Instagram', 3500);
+        return;
+      }
+
+      syntheticClick(optBtn);
+
+      let dlg = null;
+      const start = Date.now();
+      while (Date.now() - start < 2500) {
+        await new Promise(r => setTimeout(r, 80));
+        dlg = document.querySelector('div[role="dialog"]');
+        if (dlg && (dlg.offsetWidth > 0 || dlg.offsetHeight > 0)) break;
+      }
+
+      if (!dlg) {
+        toast('Không mở được menu tùy chọn Instagram', 3000);
+        return;
+      }
+
+      let notIntBtn = null;
+      const btns = Array.from(dlg.querySelectorAll('button, [role="button"]'));
+      for (const b of btns) {
+        const txt = (b.textContent || '').trim().toLowerCase();
+        if (txt.includes('không quan tâm') || txt.includes('not interested') || txt.includes('ẩn bài viết') || txt.includes('hide')) {
+          notIntBtn = b;
+          break;
+        }
+      }
+
+      if (!notIntBtn) {
+        for (const b of btns) {
+          const txt = (b.textContent || '').trim().toLowerCase();
+          if (txt.includes('chặn') || txt.includes('block')) {
+            notIntBtn = b;
+            break;
+          }
+        }
+      }
+
+      if (notIntBtn) {
+        syntheticClick(notIntBtn);
+        await new Promise(r => setTimeout(r, 600));
+        toast('✅ Đã đánh dấu "Không quan tâm" trên Instagram!', 3500);
+        setTimeout(() => {
+          try { api && api.next && api.next(); } catch {}
+        }, 600);
+      } else {
+        toast('Không tìm thấy mục "Không quan tâm" trong menu Instagram', 3500);
+        try { document.body.click(); } catch {}
+      }
+    } catch (err) {
+      toast('Lỗi thực hiện: ' + String(err), 3000);
+    }
+  }
   // Chặn theo từ khóa tiêu đề: clip có tiêu đề chứa từ khóa sẽ được tự lướt
   // qua (kiểm tra ở content.js). Lưu ý: Facebook Reels không có tiêu đề riêng
   // từng clip nên bộ lọc này hiệu quả nhất trên TikTok / YouTube Shorts.
@@ -1753,6 +1845,7 @@
         e.preventDefault();
         e.stopPropagation();
         if (isFacebook) hardBlockFacebookPage(false);
+        else if (isInstagram) hardNotInterestedInstagram();
         else toggleBlockAuthor();
       });
     }
@@ -1814,6 +1907,7 @@
         else if (a === 'min') setHudMini(!hudMini);
         else if (a === 'block') {
           if (isFacebook) showBlockMenuFacebook();
+          else if (isInstagram) showBlockMenuInstagram();
           else toggleBlockAuthor();
         }
         else if (a === 'copy') copyCleanLink();

@@ -1,4 +1,4 @@
-const KEYS = ['enabled', 'facebook', 'instagram', 'x', 'tiktok', 'youtube', 'hud', 'backgroundPlay', 'liteMode', 'shortcuts', 'skipSeen', 'volumeNormalize', 'autoPip', 'holdFast', 'durFilter', 'adSkip', 'debug'];
+const KEYS = ['enabled', 'facebook', 'instagram', 'x', 'tiktok', 'youtube', 'hud', 'backgroundPlay', 'liteMode', 'shortcuts', 'skipSeen', 'volumeNormalize', 'autoPip', 'holdFast', 'durFilter', 'adSkip', 'copyrightMutedSkip', 'showSkipBadge', 'debug'];
 const NUM_KEYS = ['durMin', 'durMax', 'introSkip', 'endOffset', 'bulkLimit'];
 // Giới hạn từng ô số: endOffset cho phép âm (chuyển sớm) và số lẻ 0.5 giây.
 const NUM_RANGE = { durMin: [0, 36000], durMax: [0, 36000], introSkip: [0, 60], endOffset: [-10, 10], bulkLimit: [10, 500] };
@@ -29,6 +29,8 @@ const DEFAULTS = {
   durMin: 0,
   durMax: 0,
   adSkip: true,
+  copyrightMutedSkip: false,
+  showSkipBadge: true,
   introSkip: 0,
   endOffset: -0.5,
   bulkLimit: 100,

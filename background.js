@@ -22,6 +22,8 @@ const DEFAULTS = {
   bulkLimit: 100,
   fileTemplate: '',
   remoteBlocklistUrl: '',
+  copyrightMutedSkip: false,
+  showSkipBadge: true,
   debug: false
 };
 

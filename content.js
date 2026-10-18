@@ -35,6 +35,8 @@
     useKeyboardFallback: true,
     useButtonFallback: true,
     useSwipeFallback: true,
+    copyrightMutedSkip: false,
+    showSkipBadge: true,
     debug: false
   };
 
@@ -1034,6 +1036,46 @@
     return Date.now() - lastAdvanceAt < settings.cooldownMs;
   }
 
+  let badgeEl = null;
+  let badgeTimer = null;
+  function showSkipBadge(reason) {
+    if (settings.showSkipBadge === false) return;
+    const REASON_LABELS = {
+      'blocked-skip': '🚫 Tự lướt: Kênh trong danh sách chặn',
+      'keyword-skip': '🚫 Tự lướt: Tiêu đề chứa từ khóa bị chặn',
+      'blocked-kw-skip': '🚫 Tự lướt: Tiêu đề chứa từ khóa bị chặn',
+      'ad-skip': '📢 Tự lướt: Video quảng cáo',
+      'watchdog-rescue': '⏱️ Tự lướt: Cứu hộ video bị đứng',
+      'copyright-audio-skip': '🔇 Tự lướt: Nhạc bị tắt do bản quyền',
+      'seen-skip': '👁️ Tự lướt: Video đã xem trước đó',
+      'duration-skip': '⌛ Tự lướt: Thời lượng ngoài phạm vi',
+      'dur-filter': '⌛ Tự lướt: Thời lượng ngoài phạm vi',
+      'marathon-skip': '🏃 Tự lướt: Không khớp tác giả Marathon',
+      'error-skip': '⚠️ Tự lướt: Video gặp sự cố phát'
+    };
+    const label = REASON_LABELS[reason];
+    if (!label) return;
+
+    try {
+      if (!badgeEl) {
+        badgeEl = document.createElement('div');
+        badgeEl.className = 'an-skip-badge';
+        badgeEl.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%);background:rgba(17,24,39,0.88);color:#fff;padding:7px 16px;border-radius:999px;font-size:12.5px;font-weight:600;box-shadow:0 10px 25px rgba(0,0,0,0.4);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.18);pointer-events:none;z-index:2147483647;opacity:0;transition:opacity .2s ease, transform .2s ease;letter-spacing:0.2px;font-family:system-ui,-apple-system,sans-serif;';
+        document.documentElement.appendChild(badgeEl);
+      }
+      badgeEl.textContent = label;
+      badgeEl.style.opacity = '1';
+      badgeEl.style.transform = 'translateX(-50%) translateY(0)';
+      clearTimeout(badgeTimer);
+      badgeTimer = setTimeout(() => {
+        if (badgeEl) {
+          badgeEl.style.opacity = '0';
+          badgeEl.style.transform = 'translateX(-50%) translateY(-6px)';
+        }
+      }, 1800);
+    } catch {}
+  }
+
   // Try strategies ONE AT A TIME. After each single action we wait and confirm
   // the clip actually changed before trying the next one. This guarantees we
   // never fire two navigations for one clip end (the Facebook double-skip bug).
@@ -1058,6 +1100,7 @@
     advanceFromId = currentClipId();
     advanceFiredAt = Date.now();
     log('advance start:', reason);
+    showSkipBadge(reason);
 
     try {
       chrome.runtime?.sendMessage?.({ type: 'AUTONEXT_GOTO_NEXT' }, () => void chrome.runtime.lastError);
@@ -1377,6 +1420,52 @@
       blockCheck();
       nearEndCheck(video);
       watchdogCheck(video);
+      copyrightSkipCheck(video);
+    }
+  }
+
+  // Tự động lướt qua video bị tắt tiếng do bản quyền (Copyright Muted Skip)
+  function isCopyrightMuted() {
+    if (!settings.copyrightMutedSkip) return false;
+    try {
+      if (isTikTok) {
+        const soundEl = document.querySelector('[data-e2e="video-sound-desc"], [class*="DivMusicText"]');
+        if (soundEl) {
+          const txt = (soundEl.textContent || '').toLowerCase();
+          if (txt.includes('not available') || txt.includes('không khả dụng') || txt.includes('copyright') || txt.includes('bản quyền') || txt.includes('sound removed') || txt.includes('đã bị tắt tiếng')) {
+            return true;
+          }
+        }
+        const warnBanner = document.querySelector('[class*="DivMuteIconContainer"], [data-e2e="video-music-mute-notice"]');
+        if (warnBanner) return true;
+      } else if (isFacebook) {
+        const overlays = Array.from(document.querySelectorAll('div[data-pagelet*="Reel"] span[dir="auto"], [role="main"] span[dir="auto"]'));
+        for (const el of overlays) {
+          const txt = (el.textContent || '').toLowerCase();
+          if (txt.includes('âm thanh này không khả dụng') || txt.includes('audio is no longer available') || txt.includes('tắt tiếng do bản quyền') || txt.includes('muted due to copyright')) {
+            return true;
+          }
+        }
+      } else if (isInstagram) {
+        const audioNotes = Array.from(document.querySelectorAll('span, div[role="button"] span'));
+        for (const el of audioNotes) {
+          const txt = (el.textContent || '').toLowerCase();
+          if (txt.includes('âm thanh này hiện không khả dụng') || txt.includes('audio unavailable') || txt.includes('song is currently unavailable')) {
+            return true;
+          }
+        }
+      }
+    } catch {}
+    return false;
+  }
+
+  let lastCopyrightSkipAt = 0;
+  function copyrightSkipCheck(video) {
+    if (!settings.copyrightMutedSkip || advancing || window.__anLoopHold || window.__anFavPlayback) return;
+    if (Date.now() - lastCopyrightSkipAt < 4000) return;
+    if (video && !video.paused && video.currentTime >= 0.8 && isCopyrightMuted()) {
+      lastCopyrightSkipAt = Date.now();
+      goNext(video, 'copyright-audio-skip');
     }
   }
 
@@ -1432,9 +1521,12 @@
       idle = !v || v.paused;
     }
     tickTimer = setTimeout(() => {
-      try { urlTick(); rescanTick(); } catch {}
+      try {
+        urlTick();
+        if (!idle || !document.hidden) rescanTick();
+      } catch {}
       scheduleTick();
-    }, idle ? 2000 : 600);
+    }, idle ? 4000 : 600);
   }
   scheduleTick();
 

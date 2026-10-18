@@ -1,0 +1,76 @@
+name: CI & Build Release
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate Code & Manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Syntax Check JavaScript
+        run: |
+          node -c background.js
+          node -c content.js
+          node -c features.js
+          node -c popup.js
+          echo "All JavaScript files passed syntax check!"
+
+      - name: Validate Manifest JSON
+        run: |
+          python -c "import json; d = json.load(open('manifest.json')); print('Manifest valid! Version:', d['version'])"
+
+  release:
+    name: Build & Publish Release
+    needs: validate
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Get Tag Version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Package Extension (.zip)
+        run: |
+          zip -r "AutoNext_v${{ steps.get_version.outputs.VERSION }}.zip" . \
+            -x "*.git*" \
+            -x "*.github*" \
+            -x "*backup*" \
+            -x "*.tmp" \
+            -x "*.log" \
+            -x ".vscode/*" \
+            -x ".idea/*"
+          ls -la "AutoNext_v${{ steps.get_version.outputs.VERSION }}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Auto Next v${{ steps.get_version.outputs.VERSION }}"
+          files: "AutoNext_v${{ steps.get_version.outputs.VERSION }}.zip"
+          generate_release_notes: true
+          draft: false
+          prerelease: false

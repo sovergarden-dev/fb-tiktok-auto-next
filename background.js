@@ -9,7 +9,6 @@ const DEFAULTS = {
   backgroundPlay: false,
   shortcuts: true,
   skipSeen: false,
-  volumeNormalize: false,
   autoPip: false,
   holdFast: true,
   liteMode: false,
@@ -264,7 +263,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (e) {
         sendResponse({ ok: false, error: String(e) });
       }
-      return true;
+      return;
+    }
+
+    async function waitTabComplete(tabId, timeoutMs = 9000) {
+      await new Promise((resolve) => {
+        let timer = null;
+        const listener = (tid, info) => {
+          if (tid === tabId && info.status === 'complete') {
+            clearTimeout(timer);
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        timer = setTimeout(() => {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }, timeoutMs);
+        chrome.tabs.onUpdated.addListener(listener);
+      });
     }
 
     if (message?.type === 'AUTONEXT_FETCH_REMOTE_BLOCKLIST') {
@@ -293,18 +310,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const tab = await chrome.tabs.create({ url: 'https://www.facebook.com/settings?tab=blocking', active: false });
         tabId = tab.id;
-        await new Promise((resolve) => {
-          const timeout = setTimeout(resolve, 9000);
-          const listener = (tid, info) => {
-            if (tid === tabId && info.status === 'complete') {
-              clearTimeout(timeout);
-              chrome.tabs.onUpdated.removeListener(listener);
-              resolve();
-            }
-          };
-          chrome.tabs.onUpdated.addListener(listener);
-        });
-
+        await waitTabComplete(tabId, 9000);
         await new Promise(r => setTimeout(r, 1600));
 
         const results = await chrome.scripting.executeScript({
@@ -320,7 +326,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
             for (const btn of unblockBtns) {
               let row = btn.parentElement;
-              for (let i = 0; i < 6 && row && row !== dialog; i++) {
+              for (let i = 0; i < 4 && row && row !== dialog; i++) {
                 const textNodes = Array.from(row.querySelectorAll('span[dir="auto"], div[dir="auto"]')).map(s => (s.textContent || '').trim()).filter(Boolean);
                 if (textNodes.length >= 1) {
                   const name = textNodes[0];
@@ -328,25 +334,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     const subtitle = textNodes.length > 1 ? textNodes[1] : '';
                     const img = row.querySelector('image, img');
                     const avatar = img ? (img.getAttribute('xlink:href') || img.getAttribute('src') || '') : '';
-                    list.push({ name, subtitle, avatar });
+                    if (!list.some(x => x.name === name)) {
+                      list.push({ name, subtitle, avatar });
+                    }
                     break;
                   }
                 }
+                if (row.getAttribute('role') === 'listitem') break;
                 row = row.parentElement;
-              }
-            }
-
-            if (!list.length) {
-              const scripts = Array.from(document.querySelectorAll('script')).map(s => s.textContent || '');
-              for (const sc of scripts) {
-                if (sc.includes('blocked_users') || sc.includes('blocked_pages') || sc.includes('CometSettingsBlocking')) {
-                  const nameMatches = sc.matchAll(/"name"\s*:\s*"([^"]{2,50})"[^}]*?"id"\s*:\s*"(\d+)"/g);
-                  for (const nm of nameMatches) {
-                    if (nm[1] && !list.some(x => x.name === nm[1])) {
-                      list.push({ name: nm[1], id: nm[2], subtitle: 'Tài khoản FB', avatar: '' });
-                    }
-                  }
-                }
               }
             }
 
@@ -377,19 +372,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const tab = await chrome.tabs.create({ url: 'https://www.facebook.com/settings?tab=blocking', active: false });
         tabId = tab.id;
-
-        await new Promise((resolve) => {
-          const timeout = setTimeout(resolve, 9000);
-          const listener = (tid, info) => {
-            if (tid === tabId && info.status === 'complete') {
-              clearTimeout(timeout);
-              chrome.tabs.onUpdated.removeListener(listener);
-              resolve();
-            }
-          };
-          chrome.tabs.onUpdated.addListener(listener);
-        });
-
+        await waitTabComplete(tabId, 9000);
         await new Promise(r => setTimeout(r, 1600));
 
         const res = await chrome.scripting.executeScript({
@@ -406,12 +389,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             let targetBtn = null;
             for (const btn of unblockBtns) {
               let row = btn.parentElement;
-              for (let i = 0; i < 6 && row && row !== dialog; i++) {
-                const text = (row.textContent || '').toLowerCase();
-                if (text.includes(nameToUnblock)) {
+              for (let i = 0; i < 4 && row && row !== dialog; i++) {
+                const textNodes = Array.from(row.querySelectorAll('span[dir="auto"], div[dir="auto"]')).map(s => (s.textContent || '').trim().toLowerCase());
+                if (textNodes.some(n => n === nameToUnblock || (nameToUnblock.length >= 4 && n.includes(nameToUnblock)))) {
                   targetBtn = btn;
                   break;
                 }
+                if (row.getAttribute('role') === 'listitem') break;
                 row = row.parentElement;
               }
               if (targetBtn) break;
@@ -420,22 +404,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (!targetBtn) return { ok: false, error: 'Không tìm thấy nút Bỏ chặn cho ' + nameToUnblock };
 
             targetBtn.click();
-            await new Promise(r => setTimeout(r, 800));
-
-            const confirmDlgs = Array.from(document.querySelectorAll('div[role="dialog"]'));
-            for (const dlg of confirmDlgs) {
-              const cBtns = Array.from(dlg.querySelectorAll('div[role="button"], button'));
-              for (const cb of cBtns) {
-                const t = (cb.textContent || '').trim().toLowerCase();
-                const a = (cb.getAttribute('aria-label') || '').trim().toLowerCase();
-                if (t === 'xác nhận' || t === 'confirm' || a === 'xác nhận' || a === 'confirm') {
-                  cb.click();
-                  await new Promise(r => setTimeout(r, 1000));
-                  return { ok: true };
+            let confirmed = false;
+            for (let w = 0; w < 15; w++) {
+              await new Promise(r => setTimeout(r, 100));
+              const confirmDlgs = Array.from(document.querySelectorAll('div[role="dialog"]'));
+              for (const dlg of confirmDlgs) {
+                const cBtns = Array.from(dlg.querySelectorAll('div[role="button"], button'));
+                for (const cb of cBtns) {
+                  const t = (cb.textContent || '').trim().toLowerCase();
+                  const a = (cb.getAttribute('aria-label') || '').trim().toLowerCase();
+                  if (t === 'xác nhận' || t === 'confirm' || a === 'xác nhận' || a === 'confirm') {
+                    cb.click();
+                    confirmed = true;
+                    await new Promise(r => setTimeout(r, 600));
+                    return { ok: true };
+                  }
                 }
               }
             }
-            return { ok: true };
+            return { ok: confirmed, error: confirmed ? null : 'Không tìm thấy nút Xác nhận bỏ chặn của Facebook' };
           }
         });
 

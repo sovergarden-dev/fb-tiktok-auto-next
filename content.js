@@ -230,13 +230,14 @@
         const r = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
         // Dừng khi trèo tới khung to cỡ cả trang/cả feed (chứa link của clip khác).
         if (r && (r.width > Math.max(vr.width + 560, innerWidth * 0.95) || r.height > vr.height * 2.5 + 240)) break;
-        const links = el.querySelectorAll ? el.querySelectorAll('a[href*="/video/"], a[href*="/photo/"], a[href*="/reel"]') : [];
+        const links = el.querySelectorAll ? el.querySelectorAll('a[href*="/video/"], a[href*="/photo/"], a[href*="/reel"], a[href*="/p/"], a[href*="/status/"]') : [];
         for (const a of links) {
           const h = a.href || '';
           let mm;
           if (kind === 'tt' && (mm = h.match(/\/(?:video|photo)\/(\d+)/))) { lastDomClip = { id: 'tt:' + mm[1], url: h }; return lastDomClip.id; }
           if (kind === 'fb' && (mm = h.match(/\/reels?\/(\d+)/))) { lastDomClip = { id: 'fb:' + mm[1], url: h.split('?')[0] }; return lastDomClip.id; }
           if (kind === 'ig' && (mm = h.match(/\/(?:reels?|p)\/([\w-]+)/))) { lastDomClip = { id: 'ig:' + mm[1], url: h.split('?')[0] }; return lastDomClip.id; }
+          if (kind === 'x' && (mm = h.match(/\/status\/(\d+)/))) { lastDomClip = { id: 'x:' + mm[1], url: h.split('?')[0] }; return lastDomClip.id; }
         }
       }
     } catch {}
@@ -1043,13 +1044,11 @@
     const REASON_LABELS = {
       'blocked-skip': '🚫 Tự lướt: Kênh trong danh sách chặn',
       'keyword-skip': '🚫 Tự lướt: Tiêu đề chứa từ khóa bị chặn',
-      'blocked-kw-skip': '🚫 Tự lướt: Tiêu đề chứa từ khóa bị chặn',
       'ad-skip': '📢 Tự lướt: Video quảng cáo',
       'watchdog-rescue': '⏱️ Tự lướt: Cứu hộ video bị đứng',
       'copyright-audio-skip': '🔇 Tự lướt: Nhạc bị tắt do bản quyền',
       'seen-skip': '👁️ Tự lướt: Video đã xem trước đó',
       'duration-skip': '⌛ Tự lướt: Thời lượng ngoài phạm vi',
-      'dur-filter': '⌛ Tự lướt: Thời lượng ngoài phạm vi',
       'marathon-skip': '🏃 Tự lướt: Không khớp tác giả Marathon',
       'error-skip': '⚠️ Tự lướt: Video gặp sự cố phát'
     };
@@ -1476,7 +1475,10 @@
 
   function watchdogCheck(v) {
     if (!settings.enabled || !siteEnabled() || !pageIsRelevant()) return;
-    if (advancing || window.__anLoopHold || window.__anFavPlayback || isTyping()) return;
+    if (advancing || window.__anLoopHold || window.__anFavPlayback || isTyping()) {
+      watchdogStuckSince = 0;
+      return;
+    }
     if (!v || v.paused || v.ended || isLiveVideo(v)) {
       watchdogStuckSince = 0;
       return;
@@ -1539,6 +1541,9 @@
     getActiveVideo,
     next: () => goNext(getActiveVideo(), 'manual'),
     setLoopHold: (on) => { window.__anLoopHold = !!on; },
+    isTyping,
+    visibleArea,
+    realClick,
     clipId: currentClipId,
     clipUrl: currentClipUrl,
     author: currentAuthor

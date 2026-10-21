@@ -33,6 +33,22 @@ Chrome sẽ **tạm dừng video** trong cửa sổ bị thu nhỏ (minimize) ho
 - Có thể dùng tính năng **Picture-in-Picture** hoặc chia đôi màn hình.
 - Nếu video vẫn chạy (có tiếng), extension sẽ chuyển video bình thường dù tab không được focus.
 
+## Nhật ký cập nhật (v3.20.0 — Khắc phục Lỗi Logic & Tinh giản Mã nguồn Cốt lõi)
+
+Phiên bản hoàn thiện toàn diện dựa trên kết quả kiểm toán độc lập và tham vấn phản biện kỹ thuật cao cấp từ **Notion AI (Sy07)**:
+
+1. **Khắc phục triệt để các lỗi logic ảnh hưởng đến ý định người dùng**:
+   - **Hộp thoại Chặn minh bạch**: Bấm Cancel / Esc là **No-op tuyệt đối** (không thay đổi bất kỳ trạng thái nào). Khắc phục hoàn toàn lỗi người dùng bấm Hủy nhưng tiện ích vẫn tự động đưa tác giả vào danh sách chặn mềm.
+   - **Triệt tiêu Fallback nguy hiểm trên Instagram**: Gỡ bỏ hoàn toàn nhánh tự ý chuyển từ "Không quan tâm" sang "Chặn tài khoản". Nếu Instagram không có mục "Không quan tâm", tiện ích dừng lại an toàn và thông báo rõ ràng cho người dùng.
+   - **Neo chính xác tài khoản khi Bỏ chặn Facebook**: Giới hạn phạm vi thẻ con trực tiếp (`[role="listitem"]`), so khớp chính xác tên tài khoản cần bỏ chặn. Triệt tiêu hoàn toàn nguy cơ bấm nhầm nút bỏ chặn của tài khoản bên cạnh.
+   - **Bảo toàn danh sách chặn khi đồng bộ**: Chuyển đổi sang cơ chế Hợp nhất (Merge & Union) giữa danh sách sync và local, không còn tình trạng cắt xén mất 200 tác giả cũ khi vượt ngưỡng 300 mục.
+   - **Chuẩn hóa định danh tiền tố nền tảng X**: Phân tách tiền tố theo dấu hai chấm `x:`, sửa lỗi cắt xén mất ký tự đầu của username Twitter/X.
+2. **Tinh giản các tính năng ngoại lai gây nặng máy (Feature Subtraction)**:
+   - **Lược bỏ MediaRecorder Canvas Recording**: Giải phóng hơn 150 dòng mã nguồn phức tạp, loại bỏ hoàn toàn cơ chế thu âm quay màn hình giả lập gây đơ trình duyệt.
+   - **Lược bỏ tính năng Lặp đoạn A–B**: Triệt tiêu vòng lặp timer `setInterval` 200ms chạy ngầm liên tục suốt phiên duyệt web, giảm tải CPU tối đa.
+   - **Lược bỏ Web Audio Dynamics Compressor**: Gỡ bỏ bộ can thiệp `AudioContext` để triệt tiêu hoàn toàn nguy cơ xung đột âm thanh và vi phạm Chrome Autoplay Policy.
+   - **Hiệu quả thực tế**: Giảm hơn 15 KB mã nguồn, thanh điều khiển HUD gọn gàng, hoạt động siêu mượt mà và nhẹ máy đúng nghĩa tiện ích Auto Next chuyên dụng.
+
 ## Nhật ký cập nhật (v3.19.0 — GitHub Actions CI/CD, Tự Lướt Nhạc Bản Quyền, Smart Badge & Instagram Macro)
 
 1. **Quy trình CI/CD & Tự động đóng gói Release**: Tích hợp GitHub Actions workflow (`.github/workflows/ci.yml`). Tự động chạy kiểm tra cú pháp JavaScript và tính hợp lệ của `manifest.json`. Khi tạo Git tag phiên bản mới (ví dụ `v3.19.0`), hệ thống tự động nén toàn bộ mã nguồn sạch thành tệp `.zip` và phát hành trực tiếp trên GitHub Releases.

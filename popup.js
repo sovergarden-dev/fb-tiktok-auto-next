@@ -1,4 +1,4 @@
-const KEYS = ['enabled', 'facebook', 'instagram', 'x', 'tiktok', 'youtube', 'hud', 'backgroundPlay', 'liteMode', 'shortcuts', 'skipSeen', 'volumeNormalize', 'autoPip', 'holdFast', 'durFilter', 'adSkip', 'copyrightMutedSkip', 'showSkipBadge', 'debug'];
+const KEYS = ['enabled', 'facebook', 'instagram', 'x', 'tiktok', 'youtube', 'hud', 'backgroundPlay', 'liteMode', 'shortcuts', 'skipSeen', 'autoPip', 'holdFast', 'durFilter', 'adSkip', 'copyrightMutedSkip', 'showSkipBadge', 'debug'];
 const NUM_KEYS = ['durMin', 'durMax', 'introSkip', 'endOffset', 'bulkLimit'];
 // Giới hạn từng ô số: endOffset cho phép âm (chuyển sớm) và số lẻ 0.5 giây.
 const NUM_RANGE = { durMin: [0, 36000], durMax: [0, 36000], introSkip: [0, 60], endOffset: [-10, 10], bulkLimit: [10, 500] };
@@ -21,7 +21,6 @@ const DEFAULTS = {
   backgroundPlay: false,
   shortcuts: true,
   skipSeen: false,
-  volumeNormalize: false,
   autoPip: false,
   holdFast: true,
   liteMode: false,
@@ -38,7 +37,7 @@ const DEFAULTS = {
 };
 
 async function load() {
-  const stored = await chrome.storage.sync.get(DEFAULTS);
+  const stored = await chrome.storage.sync.get({ ...DEFAULTS, fileTemplate: '' });
   for (const key of KEYS) {
     const el = document.getElementById(key);
     if (el) el.checked = Boolean(stored[key]);
@@ -49,8 +48,7 @@ async function load() {
   }
   const tplEl = document.getElementById('fileTemplate');
   if (tplEl) {
-    const { fileTemplate } = await chrome.storage.sync.get({ fileTemplate: '' });
-    tplEl.value = fileTemplate || '';
+    tplEl.value = stored.fileTemplate || '';
   }
 }
 
@@ -90,7 +88,7 @@ function logMatches(e) {
 }
 function fmtLogLine(e) {
   const d = new Date(e.t || 0);
-  const site = e.site === 'facebook' ? 'FB' : e.site === 'tiktok' ? 'TT' : e.site === 'youtube' ? 'YT' : '·';
+  const site = e.site === 'facebook' ? 'FB' : e.site === 'instagram' ? 'IG' : e.site === 'x' ? 'X' : e.site === 'tiktok' ? 'TT' : e.site === 'youtube' ? 'YT' : '·';
   return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()) + ' [' + site + '] ' + (e.m || '');
 }
 async function renderLog() {
